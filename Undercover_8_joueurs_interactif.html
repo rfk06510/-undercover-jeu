@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Undercover 8</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#f5f6fa;color:#171923}
+.app{max-width:520px;margin:auto;padding:18px 16px 34px}
+.header{background:#171923;color:white;border-radius:26px;padding:24px 20px;margin-bottom:16px}
+h1{margin:0;font-size:34px}p{margin:7px 0 0;color:#bfc3cf}
+.panel{background:white;border-radius:24px;padding:18px;margin-bottom:14px;box-shadow:0 5px 22px #0000000c}
+label{font-weight:700;display:block;margin-bottom:9px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+button{border:0;border-radius:16px;padding:15px;font-size:16px;font-weight:750;background:#171923;color:white}
+button.alt{background:#eef0f5;color:#171923}button.selected{outline:3px solid #171923}
+.players{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.player{background:#f1f2f6;color:#171923;text-align:left;min-height:82px}
+.player small{display:block;color:#7b8190;margin-bottom:4px}.player span{font-size:19px}
+.start{width:100%;font-size:19px;padding:17px}
+.hidden{display:none!important}
+.modal{position:fixed;inset:0;background:#171923eF;display:flex;align-items:center;justify-content:center;padding:18px;z-index:10}
+.card{width:min(430px,100%);background:white;border-radius:28px;padding:30px;text-align:center}
+.name{font-size:20px;color:#727786}.role{font-size:30px;font-weight:900;margin:18px 0 8px}.word{font-size:42px;font-weight:950;margin:12px 0 24px}.hint{color:#727786;line-height:1.45}
+.close{width:100%;margin-top:16px}.danger{background:#eceef3;color:#171923}
+.status{display:flex;justify-content:space-between;color:#6d7380;font-size:14px;margin-bottom:12px}
+.next{width:100%;margin-top:12px}.vote button{width:100%;margin:5px 0;text-align:left}
+.result{text-align:center}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="header"><h1>🎭 Undercover</h1><p>8 joueurs · 1 Undercover · 1 Mr. White</p></header>
+
+<section id="setup" class="panel">
+<label>Difficulté</label>
+<div class="row">
+<button id="easy" class="selected alt" onclick="difficulty='easy';selectDiff()">🟢 Facile</button>
+<button id="hard" class="alt" onclick="difficulty='hard';selectDiff()">🔴 Difficile</button>
+</div>
+<label style="margin-top:18px">Thème</label>
+<div class="row">
+<button class="alt" onclick="themeMode='random';this.classList.add('selected')">🎲 Aléatoire</button>
+<button class="alt" onclick="themeMode='all';this.classList.add('selected')">🌈 Tout mélanger</button>
+</div>
+<p id="themePreview">Thèmes : nourriture, rappeur, musique, planète, football, films, villes, animaux, jeux vidéo, marques, etc.</p>
+</section>
+
+<section id="game" class="panel">
+<div class="status"><span>👥 8 joueurs</span><span id="round">Manche 1</span></div>
+<div id="players" class="players"></div>
+<button class="start" onclick="startGame()">▶️ COMMENCER</button>
+</section>
+
+<section id="play" class="panel hidden">
+<h2>🗣️ Place aux indices</h2>
+<p>Chaque joueur donne un indice à son tour. Quand tout le monde a parlé :</p>
+<button class="next" onclick="showVote()">🗳️ VOTER</button>
+</section>
+
+<section id="voting" class="panel hidden">
+<h2>🗳️ Qui éliminer ?</h2>
+<p>Choisis un joueur.</p><div id="voteList" class="vote"></div>
+</section>
+
+<section id="result" class="panel hidden result"></section>
+</div>
+
+<div id="modal" class="modal hidden">
+<div class="card">
+<div class="name" id="mName"></div>
+<div class="role" id="mRole"></div>
+<div class="hint" id="mHint">Ton information secrète :</div>
+<div class="word" id="mWord"></div>
+<button class="close" onclick="hide()">🙈 CACHER</button>
+</div>
+</div>
+
+<script>
+const names=["Anthony","Rafik","Anas","Ayman","Akram","Rayane","Shams","Bilahl"];
+const sets=[
+["🍕 Nourriture","pizza","pâtes"],["🎤 Rappeur","Drake","Kendrick Lamar"],["🎵 Musique","guitare","piano"],
+["🪐 Planète","Mars","Jupiter"],["⚽ Football","Messi","Mbappé"],["🎬 Films","Titanic","Avatar"],
+["🏙️ Villes","Paris","Londres"],["🐯 Animaux","lion","tigre"],["🎮 Jeux vidéo","Minecraft","Fortnite"],
+["👟 Marques","Nike","Adidas"],["🚗 Voitures","BMW","Mercedes"],["🌍 Pays","France","Italie"],
+["🧙 Fantastique","Harry Potter","Le Seigneur des Anneaux"],["🍔 Fast-food","McDonald's","Burger King"],
+["☕ Boissons","café","thé"],["✈️ Voyage","avion","train"]
+];
+let difficulty="easy",themeMode="random",game=[],under="",white="",pair=null;
+
+function selectDiff(){
+ document.getElementById("easy").classList.toggle("selected",difficulty==="easy");
+ document.getElementById("hard").classList.toggle("selected",difficulty==="hard");
+}
+function render(){
+ const box=document.getElementById("players");box.innerHTML="";
+ names.forEach((n,i)=>{
+  const b=document.createElement("button");b.className="player";
+  b.innerHTML=`<small>JOUEUR ${i+1}</small><span>${n}</span>`;
+  b.onclick=()=>reveal(n);box.appendChild(b);
+ });
+}
+function startGame(){
+ let s=sets[Math.floor(Math.random()*sets.length)];
+ pair=difficulty==="easy"?s:s; 
+ let shuffled=[...names].sort(()=>Math.random()-.5);
+ under=shuffled[0];white=shuffled[1];
+ game=names.map(n=>({name:n,role:n===under?"🕵️ UNDERCOVER":n===white?"⚪ MR. WHITE":"👤 CIVIL",word:n===white?"Aucun mot":n===under?s[2]:s[1]}));
+ document.getElementById("setup").classList.add("hidden");
+ document.getElementById("play").classList.remove("hidden");
+ document.getElementById("result").classList.add("hidden");
+ render();
+ document.getElementById("players").scrollIntoView({behavior:"smooth"});
+}
+function reveal(n){
+ if(!game.length){alert("Appuie d'abord sur COMMENCER.");return}
+ const x=game.find(a=>a.name===n);
+ document.getElementById("mName").textContent=x.name;
+ document.getElementById("mRole").textContent=x.role;
+ document.getElementById("mWord").textContent=x.word;
+ document.getElementById("modal").classList.remove("hidden");
+}
+function hide(){document.getElementById("modal").classList.add("hidden")}
+function showVote(){
+ document.getElementById("play").classList.add("hidden");
+ document.getElementById("voting").classList.remove("hidden");
+ const v=document.getElementById("voteList");v.innerHTML="";
+ game.forEach(x=>{
+  const b=document.createElement("button");b.className="alt";b.textContent="❌ "+x.name;
+  b.onclick=()=>eliminate(x);v.appendChild(b);
+ });
+}
+function eliminate(x){
+ document.getElementById("voting").classList.add("hidden");
+ const r=document.getElementById("result");r.classList.remove("hidden");
+ if(x.role.includes("UNDERCOVER")){
+  r.innerHTML=`<h2>🎉 Undercover trouvé !</h2><p>${x.name} était l'Undercover.</p><p>Le mot des Civils était <b>${pair[1]}</b>.</p><button class="next" onclick="reset()">🔄 NOUVELLE PARTIE</button>`;
+ }else if(x.role.includes("WHITE")){
+  r.innerHTML=`<h2>⚪ Mr. White éliminé !</h2><p>${x.name} était Mr. White.</p><button class="next" onclick="showVote()">🗳️ CONTINUER</button>`;
+ }else{
+  r.innerHTML=`<h2>😈 Mauvaise personne !</h2><p>${x.name} était Civil.</p><button class="next" onclick="showVote()">🗳️ CONTINUER</button>`;
+ }
+}
+function reset(){
+ game=[];document.getElementById("result").classList.add("hidden");
+ document.getElementById("play").classList.add("hidden");document.getElementById("setup").classList.remove("hidden");
+}
+render();selectDiff();
+</script>
+</body>
+</html>
